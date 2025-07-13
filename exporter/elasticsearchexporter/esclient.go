@@ -5,15 +5,14 @@ package elasticsearchexporter // import "github.com/open-telemetry/opentelemetry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	elasticsearchv8 "github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
+	elasticsearchv7 "github.com/elastic/go-elasticsearch/v7"
+	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/klauspost/compress/gzip"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
@@ -129,7 +128,7 @@ func newElasticsearchClient(
 		componentHost:   host,
 	}
 
-	return elasticsearchv8.NewClient(elasticsearchv8.Config{
+	return elasticsearchv7.NewClient(elasticsearchv7.Config{
 		Transport: httpClient.Transport,
 
 		// configure connection setup
@@ -142,11 +141,8 @@ func newElasticsearchClient(
 		// configure retry behavior
 		RetryOnStatus: config.Retry.RetryOnStatus,
 		DisableRetry:  !config.Retry.Enabled,
-		RetryOnError: func(_ *http.Request, err error) bool {
-			return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
-		},
-		MaxRetries:   min(defaultMaxRetries, config.Retry.MaxRetries),
-		RetryBackoff: createElasticsearchBackoffFunc(&config.Retry),
+		MaxRetries:    min(defaultMaxRetries, config.Retry.MaxRetries),
+		RetryBackoff:  createElasticsearchBackoffFunc(&config.Retry),
 
 		// configure sniffing
 		DiscoverNodesOnStart:  config.Discovery.OnStart,
@@ -155,11 +151,7 @@ func newElasticsearchClient(
 		// configure internal metrics reporting and logging
 		EnableMetrics:     false, // TODO
 		EnableDebugLogger: false, // TODO
-		Instrumentation: elasticsearchv8.NewOpenTelemetryInstrumentation(
-			telemetry.TracerProvider,
-			false, /* captureSearchBody */
-		),
-		Logger: esLogger,
+		Logger:            esLogger,
 	})
 }
 

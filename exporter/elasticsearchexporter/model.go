@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -114,8 +115,8 @@ func newEncoder(mode MappingMode) (documentEncoder, error) {
 		return ecsModeEncoder{
 			profilesUnsupportedEncoder: profilesUnsupportedEncoder{mode: mode},
 			nonOTelSpanEncoder: nonOTelSpanEncoder{
-				attributesPrefix: "Attributes",
-				eventsPrefix:     "Events",
+				attributesPrefix: "attributes",
+				eventsPrefix:     "events",
 				dedot:            true,
 			},
 		}, nil
@@ -173,14 +174,14 @@ func (e legacyModeEncoder) encodeLog(ec encodingContext, record plog.LogRecord, 
 	}
 	// We use @timestamp in order to ensure that we can index if the default data stream logs template is used.
 	document.AddTimestamp("@timestamp", docTimeStamp)
-	document.AddTraceID("TraceId", record.TraceID())
-	document.AddSpanID("SpanId", record.SpanID())
+	document.AddTraceID("context.traceId", record.TraceID())
+	document.AddSpanID("context.spanId", record.SpanID())
 	document.AddInt("TraceFlags", int64(record.Flags()))
-	document.AddString("SeverityText", record.SeverityText())
-	document.AddInt("SeverityNumber", int64(record.SeverityNumber()))
-	document.AddAttribute("Body", record.Body())
-	document.AddAttributes("Resource", ec.resource.Attributes())
-	document.AddAttributes("Scope", scopeToAttributes(ec.scope))
+	document.AddString("severity.text", record.SeverityText())
+	document.AddInt("severity.number", int64(record.SeverityNumber()))
+	document.AddAttribute("body", record.Body())
+	document.AddAttributes("resource", ec.resource.Attributes())
+	document.AddAttributes("scope", scopeToAttributes(ec.scope))
 	encodeAttributes(e.attributesPrefix, &document, record.Attributes(), idx)
 
 	return document.Serialize(buf, false)
@@ -228,7 +229,7 @@ func (e ecsModeEncoder) encodeLog(
 	document.AddString("log.level", record.SeverityText())
 
 	if record.Body().Type() == pcommon.ValueTypeStr {
-		document.AddAttribute("message", record.Body())
+		document.AddAttribute("body", record.Body())
 	}
 
 	return document.Serialize(buf, true)
@@ -359,18 +360,23 @@ func (e nonOTelSpanEncoder) encodeSpan(
 ) error {
 	var document objmodel.Document
 	document.AddTimestamp("@timestamp", span.StartTimestamp()) // We use @timestamp in order to ensure that we can index if the default data stream logs template is used.
-	document.AddTimestamp("EndTimestamp", span.EndTimestamp())
-	document.AddTraceID("TraceId", span.TraceID())
-	document.AddSpanID("SpanId", span.SpanID())
-	document.AddSpanID("ParentSpanId", span.ParentSpanID())
-	document.AddString("Name", span.Name())
-	document.AddString("Kind", traceutil.SpanKindStr(span.Kind()))
-	document.AddInt("TraceStatus", int64(span.Status().Code()))
-	document.AddString("TraceStatusDescription", span.Status().Message())
-	document.AddString("Link", spanLinksToString(span.Links()))
-	document.AddAttributes("Resource", ec.resource.Attributes())
-	document.AddInt("Duration", durationAsMicroseconds(span.StartTimestamp().AsTime(), span.EndTimestamp().AsTime())) // unit is microseconds
-	document.AddAttributes("Scope", scopeToAttributes(ec.scope))
+	document.AddTimestamp("startTime", span.StartTimestamp())
+	document.AddTimestamp("endTime", span.EndTimestamp())
+	document.AddTraceID("context.traceId", span.TraceID())
+	document.AddSpanID("context.spanId", span.SpanID())
+	document.AddSpanID("context.parentSpanId", span.ParentSpanID())
+	document.AddString("name", span.Name())
+	document.AddString("kind", traceutil.SpanKindStr(span.Kind()))
+	document.AddString("traceState", span.TraceState().AsRaw())
+	document.AddString("status.code", strings.ToUpper(span.Status().Code().String()))
+	document.AddString("status.message", span.Status().Message())
+	document.AddString("link", spanLinksToString(span.Links()))
+	document.AddAttributes("resource", ec.resource.Attributes())
+	if span.ParentSpanID().IsEmpty() {
+		document.AddString("attributes.span_type", "root")
+	}
+	document.AddInt("duration", durationAsMicroseconds(span.StartTimestamp().AsTime(), span.EndTimestamp().AsTime())) // unit is microseconds
+	document.AddAttributes("scope", scopeToAttributes(ec.scope))
 	encodeAttributes(e.attributesPrefix, &document, span.Attributes(), idx)
 	document.AddEvents(e.eventsPrefix, span.Events())
 	return document.Serialize(buf, e.dedot)

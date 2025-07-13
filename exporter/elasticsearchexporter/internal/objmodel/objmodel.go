@@ -33,6 +33,7 @@ package objmodel // import "github.com/open-telemetry/opentelemetry-collector-co
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"maps"
 	"math"
@@ -42,6 +43,7 @@ import (
 
 	"github.com/elastic/go-structform"
 	"github.com/elastic/go-structform/json"
+	"github.com/spf13/cast"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -144,9 +146,7 @@ func (doc *Document) Add(key string, v Value) {
 
 // AddString adds a string to the document.
 func (doc *Document) AddString(key string, v string) {
-	if v != "" {
-		doc.Add(key, StringValue(v))
-	}
+	doc.Add(key, StringValue(v))
 }
 
 // AddSpanID adds the hex presentation of a SpanID to the document. If the SpanID
@@ -154,6 +154,8 @@ func (doc *Document) AddString(key string, v string) {
 func (doc *Document) AddSpanID(key string, id pcommon.SpanID) {
 	if !id.IsEmpty() {
 		doc.AddString(key, hex.EncodeToString(id[:]))
+	} else {
+		doc.AddString(key, "")
 	}
 }
 
@@ -562,10 +564,71 @@ func arrFromAttributes(aa pcommon.Slice) []Value {
 }
 
 func appendAttributeFields(fields []field, path string, am pcommon.Map) []field {
-	for k, val := range am.All() {
+	for k, v := range am.All() {
+		var val pcommon.Value
+		switch k {
+		case "input_tokens", "latency_first_resp", "output_tokens",
+			"start_time", "start_time_first_resp", "end_time", "ls_max_tokens",
+			"latency", "max_tokens", "n":
+			if v.Type() == pcommon.ValueTypeStr {
+				val = convAttrsNum(v)
+			} else {
+				val = v
+			}
+		case "output_price", "price_unit", "presence_penalty",
+			"temperature", "top_p", "input_price", "ls_temperature", "frequency_penalty":
+			if v.Type() == pcommon.ValueTypeStr {
+				val = convAttrsFloat(v)
+			} else {
+				val = v
+			}
+		case "stream":
+			if v.Type() == pcommon.ValueTypeBool {
+				val = convAttrsBool(v)
+			} else {
+				val = v
+			}
+		default:
+			val = v
+		}
 		fields = appendAttributeValue(fields, path, k, val)
 	}
 	return fields
+}
+
+func convAttrsNum(val pcommon.Value) pcommon.Value {
+	if val.AsString() == "" {
+		return pcommon.NewValueInt(0)
+	}
+	num, err := cast.ToInt64E(val.AsString())
+	if err != nil {
+		fmt.Printf("Error converting input_tokens(%s) to int: %v\n", val.AsString(), err)
+		return pcommon.NewValueInt(0)
+	}
+	return pcommon.NewValueInt(num)
+}
+
+func convAttrsFloat(val pcommon.Value) pcommon.Value {
+	if val.AsString() == "" {
+		return pcommon.NewValueDouble(0)
+	}
+	num, err := cast.ToFloat64E(val.AsString())
+	if err != nil {
+		return pcommon.NewValueDouble(0)
+	}
+	return pcommon.NewValueDouble(num)
+}
+
+func convAttrsBool(val pcommon.Value) pcommon.Value {
+	if val.AsString() == "" {
+		return pcommon.NewValueBool(false)
+	}
+	num, err := cast.ToBoolE(val.AsString())
+	if err != nil {
+		fmt.Printf("Error converting(%s) to int: %v\n", val.AsString(), err)
+		return pcommon.NewValueBool(false)
+	}
+	return pcommon.NewValueBool(num)
 }
 
 func appendAttributeValue(fields []field, path string, key string, attr pcommon.Value) []field {
