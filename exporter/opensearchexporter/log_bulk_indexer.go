@@ -8,8 +8,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/opensearch-project/opensearch-go/v2"
-	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
+	"github.com/opensearch-project/opensearch-go/v4"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchutil"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -64,7 +65,7 @@ func (lbi *logBulkIndexer) submit(ctx context.Context, ld plog.Logs) {
 		if err != nil {
 			lbi.appendPermanentError(err)
 		} else {
-			ItemFailureHandler := func(_ context.Context, _ opensearchutil.BulkIndexerItem, resp opensearchutil.BulkIndexerResponseItem, itemErr error) {
+			ItemFailureHandler := func(_ context.Context, _ opensearchutil.BulkIndexerItem, resp opensearchapi.BulkRespItem, itemErr error) {
 				// Setup error handler. The handler handles the per item response status based on the
 				// selective ACKing in the bulk response.
 				lbi.processItemFailure(resp, itemErr, makeLog(resource, resourceSchemaURL, scope, scopeSchemaURL, log))
@@ -95,7 +96,7 @@ func makeLog(resource pcommon.Resource, resourceSchemaURL string, scope pcommon.
 	return logs
 }
 
-func (lbi *logBulkIndexer) processItemFailure(resp opensearchutil.BulkIndexerResponseItem, itemErr error, logs plog.Logs) {
+func (lbi *logBulkIndexer) processItemFailure(resp opensearchapi.BulkRespItem, itemErr error, logs plog.Logs) {
 	switch {
 	case shouldRetryEvent(resp.Status):
 		// Recoverable OpenSearch error
@@ -118,7 +119,7 @@ func (lbi *logBulkIndexer) newBulkIndexerItem(document []byte) opensearchutil.Bu
 func newLogOpenSearchBulkIndexer(client *opensearch.Client, onIndexerError func(context.Context, error)) (opensearchutil.BulkIndexer, error) {
 	return opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
 		NumWorkers: 1,
-		Client:     client,
+		Client:     opensearchapi.ClientInit(client),
 		OnError:    onIndexerError,
 	})
 }

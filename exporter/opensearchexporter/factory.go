@@ -25,6 +25,7 @@ func NewFactory() exporter.Factory {
 		newDefaultConfig,
 		exporter.WithTraces(createTracesExporter, metadata.TracesStability),
 		exporter.WithLogs(createLogsExporter, metadata.LogsStability),
+		exporter.WithMetrics(createMetricsExporter, component.StabilityLevelBeta),
 	)
 }
 
@@ -39,13 +40,9 @@ func newDefaultConfig() component.Config {
 	}
 }
 
-func createTracesExporter(ctx context.Context,
-	set exporter.Settings,
-	cfg component.Config,
-) (exporter.Traces, error) {
+func createTracesExporter(ctx context.Context, set exporter.Settings, cfg component.Config) (exporter.Traces, error) {
 	c := cfg.(*Config)
 	te := newSSOTracesExporter(c, set)
-
 	return exporterhelper.NewTraces(ctx, set, cfg,
 		te.pushTraceData,
 		exporterhelper.WithStart(te.Start),
@@ -55,13 +52,9 @@ func createTracesExporter(ctx context.Context,
 		exporterhelper.WithTimeout(c.TimeoutSettings))
 }
 
-func createLogsExporter(ctx context.Context,
-	set exporter.Settings,
-	cfg component.Config,
-) (exporter.Logs, error) {
+func createLogsExporter(ctx context.Context, set exporter.Settings, cfg component.Config) (exporter.Logs, error) {
 	c := cfg.(*Config)
 	le := newLogExporter(c, set)
-
 	return exporterhelper.NewLogs(ctx, set, cfg,
 		le.pushLogData,
 		exporterhelper.WithStart(le.Start),
@@ -69,4 +62,10 @@ func createLogsExporter(ctx context.Context,
 		exporterhelper.WithRetry(c.BackOffConfig),
 		exporterhelper.WithQueue(c.QueueConfig),
 		exporterhelper.WithTimeout(c.TimeoutSettings))
+}
+
+func createMetricsExporter(ctx context.Context, setting exporter.Settings, cfg component.Config) (exporter.Metrics, error) {
+	c := cfg.(*Config)
+	m := newMetricExporter(c, setting)
+	return exporterhelper.NewMetrics(ctx, setting, cfg, m.pushMetricData)
 }

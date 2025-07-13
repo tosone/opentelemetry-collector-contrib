@@ -29,33 +29,33 @@ type ssoSpanLinks struct {
 	DroppedAttributesCount uint32         `json:"droppedAttributesCount,omitempty"`
 }
 
+type ssoSpanContext struct {
+	ParentSpanID string `json:"parentSpanId"`
+	SpanID       string `json:"spanId"`
+	TraceID      string `json:"traceId"`
+}
+
 type ssoSpan struct {
-	Attributes             map[string]any `json:"attributes,omitempty"`
-	DroppedAttributesCount uint32         `json:"droppedAttributesCount"`
-	DroppedEventsCount     uint32         `json:"droppedEventsCount"`
-	DroppedLinksCount      uint32         `json:"droppedLinksCount"`
-	EndTime                time.Time      `json:"endTime"`
-	Events                 []ssoSpanEvent `json:"events,omitempty"`
-	InstrumentationScope   struct {
-		Attributes             map[string]any `json:"attributes,omitempty"`
-		DroppedAttributesCount uint32         `json:"droppedAttributesCount"`
-		Name                   string         `json:"name"`
-		SchemaURL              string         `json:"schemaUrl"`
-		Version                string         `json:"version"`
+	Context              ssoSpanContext `json:"context"`
+	Attributes           map[string]any `json:"attributes,omitempty"`
+	EndTime              time.Time      `json:"endTime"`
+	Events               []ssoSpanEvent `json:"events,omitempty"`
+	InstrumentationScope struct {
+		Attributes map[string]any `json:"attributes,omitempty"`
+		Name       string         `json:"name"`
+		SchemaURL  string         `json:"schemaUrl"`
+		Version    string         `json:"version"`
 	} `json:"instrumentationScope,omitempty"`
-	Kind         string            `json:"kind"`
-	Links        []ssoSpanLinks    `json:"links,omitempty"`
-	Name         string            `json:"name"`
-	ParentSpanID string            `json:"parentSpanId"`
-	Resource     map[string]string `json:"resource,omitempty"`
-	SpanID       string            `json:"spanId"`
-	StartTime    time.Time         `json:"startTime"`
-	Status       struct {
+	Kind      string            `json:"kind"`
+	Links     []ssoSpanLinks    `json:"links,omitempty"`
+	Name      string            `json:"name"`
+	Resource  map[string]string `json:"resource,omitempty"`
+	StartTime time.Time         `json:"startTime"`
+	Status    struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"status"`
 	Timestamp  time.Time `json:"@timestamp"`
-	TraceID    string    `json:"traceId"`
 	TraceState string    `json:"traceState"`
 }
 

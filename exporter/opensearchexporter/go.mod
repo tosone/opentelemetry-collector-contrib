@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden v0.128.0
-	github.com/opensearch-project/opensearch-go/v2 v2.3.0
+	github.com/opensearch-project/opensearch-go/v4 v4.5.0
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/collector/component v1.34.0
 	go.opentelemetry.io/collector/component/componenttest v0.128.0
@@ -59,7 +59,7 @@ require (
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elastic/go-structform v0.0.12
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -76,7 +76,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.34.0 // indirect
 	go.opentelemetry.io/collector/config/configtls v1.34.0 // indirect
@@ -98,3 +98,5 @@ require (
 replace github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil => ../../pkg/pdatautil
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden => ../../pkg/golden
+
+replace github.com/opensearch-project/opensearch-go/v4 => code.byted.org/epscp/opensearch-go/v4 v4.0.0-20250713140948-d1f6e44d20db

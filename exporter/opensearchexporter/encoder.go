@@ -6,6 +6,9 @@ package opensearchexporter // import "github.com/open-telemetry/opentelemetry-co
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -16,14 +19,8 @@ import (
 )
 
 type mappingModel interface {
-	encodeLog(resource pcommon.Resource,
-		scope pcommon.InstrumentationScope,
-		schemaURL string,
-		record plog.LogRecord) ([]byte, error)
-	encodeTrace(resource pcommon.Resource,
-		scope pcommon.InstrumentationScope,
-		schemaURL string,
-		record ptrace.Span) ([]byte, error)
+	encodeLog(resource pcommon.Resource, scope pcommon.InstrumentationScope, schemaURL string, record plog.LogRecord) ([]byte, error)
+	encodeTrace(resource pcommon.Resource, scope pcommon.InstrumentationScope, schemaURL string, record ptrace.Span) ([]byte, error)
 }
 
 // encodeModel supports multiple encoding OpenTelemetry signals to multiple schemas.
@@ -150,25 +147,32 @@ func (m *encodeModel) encodeTrace(
 	span ptrace.Span,
 ) ([]byte, error) {
 	sso := ssoSpan{}
-	sso.Attributes = span.Attributes().AsRaw()
-	sso.DroppedAttributesCount = span.DroppedAttributesCount()
-	sso.DroppedEventsCount = span.DroppedEventsCount()
-	sso.DroppedLinksCount = span.DroppedLinksCount()
+	sso.Context.ParentSpanID = span.ParentSpanID().String()
+	sso.Context.SpanID = span.SpanID().String()
+	sso.Context.TraceID = span.TraceID().String()
+	sso.TraceState = span.TraceState().AsRaw()
+	sso.Attributes = convertAttrs(span.Attributes())
 	sso.EndTime = span.EndTimestamp().AsTime()
 	sso.Kind = span.Kind().String()
 	sso.Name = span.Name()
-	sso.ParentSpanID = span.ParentSpanID().String()
 	sso.Resource = attributesToMapString(resource.Attributes())
-	sso.SpanID = span.SpanID().String()
 	sso.StartTime = span.StartTimestamp().AsTime()
-	sso.Status.Code = span.Status().Code().String()
+	sso.Status.Code = strings.ToUpper(span.Status().Code().String())
 	sso.Status.Message = span.Status().Message()
-	sso.TraceID = span.TraceID().String()
-	sso.TraceState = span.TraceState().AsRaw()
+	sso.Timestamp = span.StartTimestamp().AsTime()
+
+	statusCode := getRuntimeStatusCode(span.Attributes())
+	if statusCode != "" {
+		sso.Status.Code = statusCode
+	}
+
+	if sso.Context.ParentSpanID == "" {
+		sso.Attributes["span_type"] = "root"
+	}
 
 	if span.Events().Len() > 0 {
 		sso.Events = make([]ssoSpanEvent, span.Events().Len())
-		for i := 0; i < span.Events().Len(); i++ {
+		for i := range span.Events().Len() {
 			e := span.Events().At(i)
 			ssoEvent := &sso.Events[i]
 			ssoEvent.Attributes = e.Attributes().AsRaw()
@@ -199,14 +203,13 @@ func (m *encodeModel) encodeTrace(
 	}
 
 	sso.InstrumentationScope.Name = scope.Name()
-	sso.InstrumentationScope.DroppedAttributesCount = scope.DroppedAttributesCount()
 	sso.InstrumentationScope.Version = scope.Version()
 	sso.InstrumentationScope.SchemaURL = schemaURL
 	sso.InstrumentationScope.Attributes = scope.Attributes().AsRaw()
 
 	if span.Links().Len() > 0 {
 		sso.Links = make([]ssoSpanLinks, span.Links().Len())
-		for i := 0; i < span.Links().Len(); i++ {
+		for i := range span.Links().Len() {
 			link := span.Links().At(i)
 			ssoLink := &sso.Links[i]
 			ssoLink.Attributes = link.Attributes().AsRaw()
@@ -221,4 +224,93 @@ func (m *encodeModel) encodeTrace(
 
 func epochMilliTimestamp(record plog.LogRecord) int64 {
 	return record.Timestamp().AsTime().UnixMilli()
+}
+
+func getRuntimeStatusCode(attrs pcommon.Map) string {
+	var statusCode string
+	attrs.Range(func(k string, v pcommon.Value) bool {
+		if k == "llm_run_status" {
+			statusCode = strings.ToUpper(v.AsString())
+		}
+		return true
+	})
+	return statusCode
+}
+
+func convertAttrs(attrs pcommon.Map) map[string]any {
+	var result = make(map[string]any, attrs.Len())
+	attrs.Range(func(k string, v pcommon.Value) bool {
+		switch k {
+		case "input_tokens", "latency_first_resp", "output_tokens",
+			"start_time", "start_time_first_resp", "end_time", "ls_max_tokens",
+			"latency", "max_tokens", "n":
+			if v.Type() == pcommon.ValueTypeStr {
+				convAttrsNum(result, k, v.AsString())
+				return true
+			} else {
+				result[k] = v.AsRaw()
+			}
+		case "output_price", "price_unit", "presence_penalty",
+			"temperature", "top_p", "input_price", "ls_temperature", "frequency_penalty":
+			if v.Type() == pcommon.ValueTypeStr {
+				convAttrsFloat(result, k, v.AsString())
+				return true
+			} else {
+				result[k] = v.AsRaw()
+			}
+		case "stream":
+			if v.Type() == pcommon.ValueTypeBool {
+				convAttrsBool(result, k, v.AsString())
+				return true
+			} else {
+				result[k] = v.AsRaw()
+			}
+		default:
+			result[k] = v.AsRaw()
+		}
+		return true
+	})
+	return result
+}
+
+func convAttrsNum(result map[string]any, key, str string) {
+	if str == "" {
+		result[key] = 0
+		return
+	}
+	num, err := strconv.Atoi(str)
+	if err != nil {
+		fmt.Printf("Error converting input_tokens(%s) to int: %v\n", str, err)
+		result[key] = str
+		return
+	}
+	result[key] = num
+}
+
+func convAttrsFloat(result map[string]any, key, str string) {
+	if str == "" {
+		result[key] = 0
+		return
+	}
+	num, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		fmt.Printf("Error converting input_tokens(%s) to int: %v\n", str, err)
+		result[key] = str
+		return
+	}
+	result[key] = num
+}
+
+func convAttrsBool(result map[string]any, key, str string) {
+	if str == "" {
+		result[key] = 0
+		return
+	}
+	num, err := strconv.ParseBool(str)
+	if err != nil {
+		fmt.Printf("Error converting input_tokens(%s) to int: %v\n", str, err)
+		result[key] = str
+		return
+	}
+	result[key] = num
 }

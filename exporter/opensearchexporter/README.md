@@ -46,7 +46,7 @@ Supports standard TLS settings as part of HTTP settings. See [TLS Configuration/
 - `timeout` : See [timeout](https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/exporterhelper/README.md)
 
 ### Bulk Indexer Options
-- `bulk_action` (optional): the [action](https://opensearch.org/docs/2.9/api-reference/document-apis/bulk/) for ingesting data. Only `create` and `index` are allowed here. 
+- `bulk_action` (optional): the [action](https://opensearch.org/docs/2.9/api-reference/document-apis/bulk/) for ingesting data. Only `create` and `index` are allowed here.
 ## Example
 
 ```yaml
@@ -55,7 +55,7 @@ extensions:
   client_auth:
     username: username
     password: password
-    
+
 exporters:
   opensearch/trace:
     http:

@@ -7,7 +7,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/opensearch-project/opensearch-go/v2"
+	"github.com/opensearch-project/opensearch-go/v4"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/exporter"
@@ -23,6 +23,7 @@ type ssoTracesExporter struct {
 	model        mappingModel
 	httpSettings confighttp.ClientConfig
 	telemetry    component.TelemetrySettings
+	index        string
 }
 
 func newSSOTracesExporter(cfg *Config, set exporter.Settings) *ssoTracesExporter {
@@ -38,6 +39,7 @@ func newSSOTracesExporter(cfg *Config, set exporter.Settings) *ssoTracesExporter
 		bulkAction:   cfg.BulkAction,
 		model:        model,
 		httpSettings: cfg.ClientConfig,
+		index:        cfg.TracesIndex,
 	}
 }
 
@@ -57,7 +59,7 @@ func (s *ssoTracesExporter) Start(ctx context.Context, host component.Host) erro
 }
 
 func (s *ssoTracesExporter) pushTraceData(ctx context.Context, td ptrace.Traces) error {
-	indexer := newTraceBulkIndexer(s.Dataset, s.Namespace, s.bulkAction, s.model)
+	indexer := newTraceBulkIndexer(s.Dataset, s.Namespace, s.index, s.bulkAction, s.model)
 	startErr := indexer.start(s.client)
 	if startErr != nil {
 		return startErr
