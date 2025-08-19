@@ -198,6 +198,9 @@ func (e ecsModeEncoder) encodeLog(
 	// First, try to map resource-level attributes to ECS fields.
 	encodeAttributesECSMode(&document, ec.resource.Attributes(), resourceAttrsConversionMap, resourceAttrsToPreserve)
 
+	// Additionally, add labels and resource attributes specifically to the resource field
+	encodeLabelsToResourceECSMode(&document, ec.resource.Attributes())
+
 	// Then, try to map scope-level attributes to ECS fields.
 	scopeAttrsConversionMap := map[string]string{
 		// None at the moment
@@ -491,6 +494,65 @@ func encodeAttributesECSMode(document *objmodel.Document, attrs pcommon.Map, con
 		// Otherwise, add key at top level with attribute name as-is.
 		document.AddAttribute(k, v)
 	}
+}
+
+// encodeLabelsToResourceECSMode adds labels and resource attributes specifically to the resource field
+func encodeLabelsToResourceECSMode(document *objmodel.Document, attrs pcommon.Map) {
+	resourceAttrs := make(map[string]pcommon.Value)
+
+	// Collect all attributes that should go into the resource field
+	for k, v := range attrs.All() {
+		// Add k8s labels and other resource-related attributes to resource field
+		if isLabelOrResourceAttribute(k) {
+			resourceAttrs[k] = v
+		}
+	}
+
+	// Add collected attributes to the resource field
+	if len(resourceAttrs) > 0 {
+		resourceMap := pcommon.NewMap()
+		for k, v := range resourceAttrs {
+			v.CopyTo(resourceMap.PutEmpty(k))
+		}
+		document.AddAttributes("resource", resourceMap)
+	}
+}
+
+// isLabelOrResourceAttribute determines if an attribute should be placed in the resource field
+func isLabelOrResourceAttribute(key string) bool {
+	// K8s labels typically have these prefixes
+	labelPrefixes := []string{
+		"k8s.pod.labels.",
+		"k8s.node.labels.",
+		"k8s.namespace.labels.",
+		"k8s.deployment.labels.",
+		"k8s.replicaset.labels.",
+		"k8s.daemonset.labels.",
+		"k8s.statefulset.labels.",
+		"k8s.job.labels.",
+		"k8s.cronjob.labels.",
+		"k8s.service.labels.",
+		"k8s.ingress.labels.",
+		// Also include resource semantic convention attributes
+		"service.",
+		"deployment.",
+		"host.",
+		"container.",
+		"process.",
+		"os.",
+		"cloud.",
+		"k8s.",
+		"workspace_id",
+		"task_id",
+	}
+
+	for _, prefix := range labelPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func encodeLogAgentNameECSMode(document *objmodel.Document, resource pcommon.Resource) {
