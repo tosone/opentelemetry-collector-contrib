@@ -166,13 +166,6 @@ func (m *encodeModel) encodeTrace(
 		sso.Status.Code = statusCode
 	}
 
-	if sso.Context.ParentSpanID == "" {
-		if sso.Attributes["span_type"] != nil &&
-			len(strings.TrimSpace(sso.Attributes["span_type"].(string))) == 0 {
-			sso.Attributes["span_type"] = "root"
-		}
-	}
-
 	if span.Events().Len() > 0 {
 		sso.Events = make([]ssoSpanEvent, span.Events().Len())
 		for i := range span.Events().Len() {
