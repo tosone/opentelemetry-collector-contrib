@@ -376,7 +376,9 @@ func (e nonOTelSpanEncoder) encodeSpan(
 	document.AddString("link", spanLinksToString(span.Links()))
 	document.AddAttributes("resource", ec.resource.Attributes())
 	if span.ParentSpanID().IsEmpty() {
-		document.AddString("attributes.span_type", "root")
+		if val, ok := span.Attributes().Get("span_type"); !ok || len(strings.TrimSpace(val.AsString())) == 0 {
+			document.AddString("attributes.span_type", "root")
+		}
 	}
 	document.AddInt("duration", durationAsMicroseconds(span.StartTimestamp().AsTime(), span.EndTimestamp().AsTime())) // unit is microseconds
 	document.AddAttributes("scope", scopeToAttributes(ec.scope))
