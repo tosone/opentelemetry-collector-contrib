@@ -167,7 +167,8 @@ func (m *encodeModel) encodeTrace(
 	}
 
 	if sso.Context.ParentSpanID == "" {
-		if len(strings.TrimSpace(sso.Attributes["span_type"].(string))) == 0 {
+		if sso.Attributes["span_type"] != nil &&
+			len(strings.TrimSpace(sso.Attributes["span_type"].(string))) == 0 {
 			sso.Attributes["span_type"] = "root"
 		}
 	}
